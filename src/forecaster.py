@@ -154,10 +154,12 @@ def train_trace(X: np.ndarray, L: int, P: int, seed: int, arch: str = "lstm",
     n, C = X.shape
     M = n - L - P + 1
     Xt = torch.as_tensor(X, dtype=torch.float32, device=device)
+    w = torch.ones(M, device=device) if weights is None else torch.as_tensor(weights, dtype=torch.float32, device=device)
+    if w.sum() == 0:
+        raise ValueError("El conjunto monitoreado tiene peso total cero")
     model = ARCHS[arch](C, L, P, **(model_kw or {})).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.9, patience=3)
-    w = torch.ones(M, device=device) if weights is None else torch.as_tensor(weights, dtype=torch.float32, device=device)
     gen = torch.Generator(device="cpu").manual_seed(seed)
 
     lrs, L_hist, H_hist, mon = [], [], [], []

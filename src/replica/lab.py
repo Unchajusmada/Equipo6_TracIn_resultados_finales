@@ -138,13 +138,16 @@ def run(X: np.ndarray, L: int, P: int, seed: int, cfg: Cfg, device: str = "cpu",
     n, C = Xn.shape
     M = n - L - P + 1
     Xt = torch.as_tensor(Xn, dtype=torch.float32, device=device)
-    model = LSTM(C, P, cfg.hidden).to(device)
-    opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
-    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.9, patience=3) if cfg.sched else None
     n_val = int(M * cfg.val_frac)
     tr_idx = torch.arange(M - n_val, device=device)
     va_idx = torch.arange(M - n_val, M, device=device)
     w_all = torch.ones(M, device=device) if weights is None else torch.as_tensor(weights, dtype=torch.float32, device=device)
+    ref = va_idx if n_val > 0 else tr_idx
+    if w_all[ref].sum() == 0:
+        raise ValueError("El conjunto monitoreado tiene peso total cero")
+    model = LSTM(C, P, cfg.hidden).to(device)
+    opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.9, patience=3) if cfg.sched else None
     gen = torch.Generator().manual_seed(seed)
     D = P * C
     si = torch.zeros(M, device=device)
@@ -176,7 +179,6 @@ def run(X: np.ndarray, L: int, P: int, seed: int, cfg: Cfg, device: str = "cpu",
         losses.append(l_all.cpu().numpy().astype(np.float32))
         if callback is not None:
             callback(len(lrs), si.cpu().numpy().astype(np.float64), losses[-1])
-        ref = va_idx if n_val > 0 else tr_idx
         mon = float((l_all[ref] * w_all[ref]).sum() / w_all[ref].sum())
         if sched is not None:
             sched.step(mon)
