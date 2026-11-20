@@ -24,6 +24,9 @@ import pandas as pd  # noqa: E402
 from scipy.stats import friedmanchisquare, wilcoxon  # noqa: E402
 
 from stats import FINAL, M3, PAPER_D, PAPER_S, PER_SERIES, holm, method_frame, paired, per_series  # noqa: E402
+from audit_statistics import load_block
+from final.evaluate import checked_labels, checked_vector, evaluation_mask
+from nasa_cohort import HISTORICAL, MAIN, run_files, validate_pairs as validate_nasa_pairs
 
 OUT = RES / "paper"
 TAB, FIG = OUT / "tablas", OUT / "figs"
@@ -158,13 +161,13 @@ def _dist_to_anom(y):
 
 def halo_job(args):
     block, f = args
-    from common import project_sum, project_targets_mean, valid_mask
+    from common import project_sum, project_targets_mean
     from sklearn.metrics import roc_auc_score
     z = np.load(f)
     pre = "L4P1|" if block == "synth" else ""
-    y = z["y"].astype(bool)
+    y = checked_labels(z["y"])
     n = len(y)
-    m = valid_mask(n)
+    m = evaluation_mask(n)
     d = _dist_to_anom(y)
     halo = (~y) & (d >= 1) & (d <= SPAN - 1) & m
     far = (~y) & (d >= SPAN) & m
@@ -193,7 +196,7 @@ def halo_job(args):
     for tr in ("base", "adapt_r3", "pd"):
         if pre + tr not in z.files:
             continue
-        s = z[pre + tr].astype(np.float64)
+        s = checked_vector(z[pre + tr], f"{f.name}: {pre + tr}", n - L - P + 1)
         for pj, sc in (("win", project_sum(s, SPAN, n)), ("tgt", project_targets_mean(s, L, P, n))):
             r = dict(**meta, train=tr, proj=pj)
             if anom.any() and halo.any() and far.any():
@@ -219,12 +222,20 @@ def halo_job(args):
     return rows, dict(**meta, prof=prof, pos=pos_curve)
 
 
-def run_halo(block, workers):
-    files = sorted(f for f in (RES / block).glob("*.npz") if ".tmp" not in f.name)
+def run_halo(block, workers, *, nasa_cohort=MAIN, expected_nasa_pairs=None):
+    root = RES / block
+    files = (run_files(root, nasa_cohort) if block == "nasa"
+             else sorted(f for f in root.glob("*.npz") if ".tmp" not in f.name))
+    if expected_nasa_pairs is not None and {tuple(f.stem.rsplit("_s", 1)) for f in files} != expected_nasa_pairs:
+        raise ValueError("Los NPZ de halo y la evaluación tienen diferentes corridas NASA")
     import multiprocessing as mp
     rows, profs = [], []
     with mp.get_context("spawn").Pool(workers) as pool:
         for r, p in pool.imap_unordered(halo_job, [(block, f) for f in files]):
+            if block == "nasa":
+                p["nasa_cohort"] = nasa_cohort
+                for row in r:
+                    row["nasa_cohort"] = nasa_cohort
             rows += r
             profs.append(p)
     pd.DataFrame(rows).to_csv(OUT / f"halo_{block}.csv", index=False)
@@ -659,7 +670,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=20)
     ap.add_argument("--no-halo", action="store_true", help="reutiliza halo_*.csv / perfil_*.json ya calculados")
+    ap.add_argument("--nasa-first-row", action="store_true", help="Usa la cohorte histórica NASA de 81 canales")
     a = ap.parse_args()
+    cohort = HISTORICAL if a.nasa_first_row else MAIN
     OUT.mkdir(parents=True, exist_ok=True)
     TAB.mkdir(parents=True, exist_ok=True)
     FIG.mkdir(parents=True, exist_ok=True)
@@ -668,9 +681,13 @@ def main():
     num = json.loads((RES / "final_numbers.json").read_text())
     evs = {b: load(b) for b in ("synth", "contam", "real", "smd", "nasa", "semi")}
     evs = {b: e for b, e in evs.items() if e is not None}
+    if "nasa" in evs:
+        load_block(RES / "nasa_eval.csv", "nasa", nasa_cohort=cohort)
+        if num.get("nasa", {}).get("nasa_cohort") != cohort:
+            raise ValueError("El JSON de estadísticas históricas tiene otra cohorte NASA o carece de identificación")
     mfs = {b: method_frame(e, b) for b, e in evs.items()}
     mfh = {b: (per_series(mf) if b in PER_SERIES else mf) for b, mf in mfs.items()}
-    out = {}
+    out = {"analysis": "historical-statistical-method", "nasa_cohort": cohort} if "nasa" in evs else {}
     write_tab("hipotesis", tab_hyp([(BNAME[b], num[b]["hyp"]) for b in mfs if b in num],
               "Hipótesis preregistradas. Wilcoxon pareado; unidad: (dataset, semilla) en sintéticos y reales, "
               "(mezcla, nivel, semilla) en contaminación, serie (promedio de semillas) en SMD y SMAP/MSL. "
@@ -745,11 +762,19 @@ def main():
     # mecanismo
     halos, profs = {}, {}
     for b in mfs:
+        nasa_pairs = set(zip(evs[b].ds, evs[b].seed.astype(str))) if b == "nasa" else None
         if a.no_halo and (OUT / f"halo_{b}.csv").exists():
             halos[b] = pd.read_csv(OUT / f"halo_{b}.csv", dtype={"ds": str, "mix": str})
             profs[b] = json.loads((OUT / f"perfil_{b}.json").read_text())
+            if b == "nasa":
+                for records in (halos[b].to_dict("records"), profs[b]):
+                    if any(row.get("nasa_cohort") != cohort for row in records):
+                        raise ValueError("El caché de halo tiene otra cohorte NASA o carece de identificación")
+                    validate_nasa_pairs(((row["ds"], row["seed"]) for row in records), cohort)
+                    if {(row["ds"], str(row["seed"])) for row in records} != nasa_pairs:
+                        raise ValueError("El caché de halo y la evaluación tienen diferentes corridas NASA")
         else:
-            halos[b], profs[b] = run_halo(b, a.workers)
+            halos[b], profs[b] = run_halo(b, a.workers, nasa_cohort=cohort, expected_nasa_pairs=nasa_pairs)
     write_tab("halo", tab_halo([(BNAME[b], halos[b]) for b in halos],
               "Mecanismo de la mejora 3. Halo: instantes normales a distancia $1..L{+}P{-}1$ de una anomalía. "
               "Top-$k$: los $k$ instantes con mayor score, $k$ = número de anomalías.", "tab:halo"))

@@ -6,6 +6,7 @@ import argparse
 import csv
 import itertools
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from scipy.stats import spearmanr, t
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+from nasa_cohort import HISTORICAL, MAIN, N_SEEDS, validate_pairs as validate_nasa_pairs
 BASE = ("base", "win")
 M3 = ("base", "tgt")
 FINAL = ("adapt_r3", "tgt")
@@ -24,7 +27,7 @@ DESIGNS = {
     "contam": (("ds", "ratio", "seed"), (3, 7, 20), "seed"),
     "real": (("ds", "seed"), (4, 10), "ds"),
     "smd": (("ds", "seed"), (28, 5), "ds"),
-    "nasa": (("ds", "seed"), (81, 5), "ds"),
+    "nasa": (("ds", "seed"), (80, N_SEEDS), "ds"),
     "semi": (("ds", "mix", "ratio", "seed"), (10, 3, 5, 3), "ds"),
 }
 RATIOS = {
@@ -43,11 +46,16 @@ def validate_pairs(methods):
     return sorted(keys)
 
 
-def load_block(path, block):
+def load_block(path, block, *, nasa_cohort=MAIN):
     columns, sizes, _ = DESIGNS[block]
     methods = {method: {} for method in METHODS}
+    nasa_pairs = set()
     with path.open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream):
+            if block == "nasa":
+                if row.get("nasa_cohort", nasa_cohort) != nasa_cohort:
+                    raise ValueError(f"NASA: cohorte incompatible con {nasa_cohort}")
+                nasa_pairs.add((row["ds"], row["seed"]))
             method = (row["train"], row["proj"])
             if row["cfg"] != "L4P1" or method not in METHODS:
                 continue
@@ -60,6 +68,11 @@ def load_block(path, block):
                 raise ValueError(f"{block}: invalid metric at {key}, {method}")
             methods[method][key] = values
     keys = validate_pairs(methods)
+    if block == "nasa":
+        validate_nasa_pairs(nasa_pairs, nasa_cohort)
+        if set(keys) != nasa_pairs:
+            raise ValueError("NASA: faltan comparaciones primarias para la cohorte completa")
+        sizes = (len({ds for ds, _ in keys}), N_SEEDS)
     levels = [set(axis) for axis in zip(*keys)]
     if tuple(map(len, levels)) != sizes or set(itertools.product(*levels)) != set(keys):
         raise ValueError(f"{block}: incomplete or unexpected factorial design")
@@ -196,13 +209,16 @@ def main():
     parser.add_argument("--input", type=Path, default=ROOT / "results" / "final")
     parser.add_argument("--delta", type=float, help="Scientifically justified absolute F1 margin")
     parser.add_argument("--delta-justification", help="Scientific rationale for the supplied margin")
+    parser.add_argument("--nasa-first-row", action="store_true", help="Select the historical NASA cohort of 81 channels")
     args = parser.parse_args()
     if (args.delta is not None) != bool(args.delta_justification and args.delta_justification.strip()):
         parser.error("--delta and --delta-justification must be supplied together")
     if args.delta is not None and not 0 < args.delta <= 1:
         parser.error("--delta must be in (0, 1]")
-    blocks = {block: load_block(args.input / f"{block}_eval.csv", block) for block in DESIGNS}
-    output = {"delta_justification": args.delta_justification,
+    cohort = HISTORICAL if args.nasa_first_row else MAIN
+    blocks = {block: load_block(args.input / f"{block}_eval.csv", block, nasa_cohort=cohort) for block in DESIGNS}
+    output = {"analysis": "corrected-audit", "nasa_cohort": cohort,
+              "delta_justification": args.delta_justification,
               "blocks": {block: analyze_block(data, block, args.delta)
                          for block, data in blocks.items()},
               "h6_descriptive": h6_summary(blocks)}

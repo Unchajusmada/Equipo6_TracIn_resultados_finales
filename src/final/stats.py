@@ -8,8 +8,11 @@ Uso:    python stats.py
 from __future__ import annotations
 
 import json
+import argparse
 
 from core import RES  # noqa: F401  (fija sys.path)
+from nasa_cohort import HISTORICAL, MAIN, validate_pairs as validate_nasa_pairs
+from audit_statistics import load_block
 
 import numpy as np
 import pandas as pd
@@ -41,7 +44,7 @@ BLOCK_NAME = {"synth": "Sintéticos (15 datasets × 20 semillas, L4P1)",
               "contam": "Contaminación controlada (3 mezclas × 7 niveles × 20 semillas, L4P1)",
               "real": "Reales (4 datasets × semillas, L4P1)",
               "smd": "SMD (28 máquinas × 5 semillas, L4P1; unidad de prueba = máquina)",
-              "nasa": "SMAP + MSL (82 canales × 5 semillas, L4P1; unidad de prueba = canal)",
+              "nasa": "SMAP + MSL (5 semillas por canal, L4P1; unidad de prueba = canal)",
               "semi": "Contaminación semisintética sobre fondo real SMD (10 máquinas × 3 mezclas × 5 niveles × 3 semillas)"}
 BLOCKS = ("synth", "contam", "real", "smd", "nasa", "semi")
 PER_SERIES = ("smd", "nasa")      # pruebas entre series (promedio sobre semillas)
@@ -99,11 +102,11 @@ def paired(mf, block, a, b, metric):
     k = keys(block)
     A = mf[mf.method == a].set_index(k)[metric]
     B = mf[mf.method == b].set_index(k)[metric]
-    j = A.index.intersection(B.index)
-    d = (A.loc[j] - B.loc[j]).values
-    d = d[np.isfinite(d)]
-    if len(d) == 0:
-        return dict(n=0)
+    if not len(A) or not A.index.is_unique or not B.index.is_unique or set(A.index) != set(B.index):
+        raise ValueError(f"{block}: comparación no pareada entre {a} y {b}")
+    d = (A - B.reindex(A.index)).values
+    if not np.isfinite(d).all():
+        raise ValueError(f"{block}: métrica {metric} indefinida para {a} o {b}")
     nz = d[d != 0]
     p = float(wilcoxon(nz).pvalue) if len(nz) >= 2 else float("nan")
     ranks = pd.Series(np.abs(nz)).rank().values
@@ -307,11 +310,15 @@ def paper_protocol_synth(ev):
     return res
 
 
-def diag_table(block):
+def diag_table(block, *, nasa_cohort=MAIN):
     p = RES / f"{block}_diag.csv"
     if not p.exists():
         return None
     d = pd.read_csv(p, dtype={"ds": str, "mix": str})
+    if block == "nasa":
+        if "nasa_cohort" in d and not (d.nasa_cohort == nasa_cohort).all():
+            raise ValueError("El diagnóstico tiene otra cohorte NASA")
+        validate_nasa_pairs(zip(d.ds, d.seed), nasa_cohort)
     d = d[d.cfg == "L4P1"]
     rows = []
     for mode, nm in (("trim_r1", "Recorte z>2, ronda 1"), ("trim_r2", "Recorte z>2, ronda 2"),
@@ -323,6 +330,13 @@ def diag_table(block):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Genera estadísticas con el método histórico")
+    parser.add_argument("--nasa-first-row", action="store_true", help="Usa la cohorte histórica NASA de 81 canales")
+    args = parser.parse_args()
+    cohort = HISTORICAL if args.nasa_first_row else MAIN
+    nasa_csv = RES / "nasa_eval.csv"
+    if nasa_csv.exists():
+        load_block(nasa_csv, "nasa", nasa_cohort=cohort)
     TAB.mkdir(parents=True, exist_ok=True)
     numbers = {}
     evs = {}
@@ -335,12 +349,16 @@ def main():
         mf = method_frame(ev, block)
         mfh = per_series(mf) if block in PER_SERIES else mf      # unidad de las pruebas
         nb = numbers.setdefault(block, {})
+        nb["analysis"] = "historical-statistical-method"
+        if block == "nasa":
+            nb["nasa_cohort"] = cohort
         nb["n_units"] = int(mfh[mfh.method == FINAL].shape[0])
         nb["n_runs"] = int(mf[mf.method == FINAL].shape[0])
         nb["methods"] = {m: {k: float(mf[mf.method == m][k].mean()) for k in ("auprc", "auroc", "f1_bin", "f1_mac")}
                          for m in mf.method.unique()}
         st = summary_table(mfh, block)
-        (TAB / f"{block}_resumen.md").write_text(f"### {BLOCK_NAME[block]} — todos los métodos\n\n" + md(st) + "\n")
+        title = BLOCK_NAME[block] + (f" — cohorte {cohort}" if block == "nasa" else "")
+        (TAB / f"{block}_resumen.md").write_text(f"### {title} — todos los métodos\n\n" + md(st) + "\n")
         hy = hypotheses(mfh, block, ev)
         nb["hyp"] = hy
         (TAB / f"{block}_hipotesis.md").write_text(f"### {BLOCK_NAME[block]} — hipótesis primarias\n\n" + md(hyp_table(hy)) + "\n")
@@ -354,7 +372,7 @@ def main():
         names = [(PAPER_S, "Art."), (M3, "M3"), (FINAL, "Final")]
         if block not in ("contam", "semi"):
             (TAB / f"{block}_por_dataset.md").write_text(f"### {BLOCK_NAME[block]} — por dataset\n\n" + md(per_dataset(mf, block, names)) + "\n")
-        dt = diag_table(block)
+        dt = diag_table(block, nasa_cohort=cohort)
         if dt is not None:
             (TAB / f"{block}_recorte.md").write_text(f"### {BLOCK_NAME[block]} — qué recorta cada regla (diagnóstico con etiquetas)\n\n" + md(dt) + "\n")
         if block in ("contam", "semi"):

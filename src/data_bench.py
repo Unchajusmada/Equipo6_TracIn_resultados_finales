@@ -181,4 +181,8 @@ if __name__ == "__main__":
     parser.add_argument("--nasa-first-row", action="store_true",
                         help="Incluye P-2 con su primera fila para reproducción histórica")
     args = parser.parse_args()
+    from nasa_cohort import HISTORICAL, MAIN, validate_channels
+
+    validate_channels(nasa_names(first_row=args.nasa_first_row),
+                      HISTORICAL if args.nasa_first_row else MAIN)
     build(block=args.block, nasa_first_row=args.nasa_first_row)

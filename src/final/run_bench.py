@@ -21,9 +21,10 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 from core import RES, ROOT, all_variants, save  # noqa: E402
 
 sys.path.insert(0, str(ROOT))
+from nasa_cohort import HISTORICAL, MAIN, N_SEEDS, validate_pairs
 
 L, P = 4, 1
-SEEDS = {"smd": 5, "nasa": 5, "semi": 3}
+SEEDS = {"smd": 5, "nasa": N_SEEDS, "semi": 3}
 MIXES = ["01234", "01", "234"]
 RATIOS = [0.01, 0.05, 0.10, 0.20, 0.30]
 
@@ -92,7 +93,11 @@ def main():
     from screen import parse_variant
     cfg = Cfg(**{**parse_variant("full").__dict__, "batch": 256, "max_epochs": 50})
     for block in a.blocks.split(","):
-        for stem, spec in jobs(block, nasa_first_row=a.nasa_first_row):
+        planned = jobs(block, nasa_first_row=a.nasa_first_row)
+        if block == "nasa":
+            validate_pairs(((name.removeprefix("nasa_"), seed) for _, (name, seed) in planned),
+                           HISTORICAL if a.nasa_first_row else MAIN)
+        for stem, spec in planned:
             path = RES / block / f"{stem}.npz"
             if path.exists() or not _claim(RES / block / ".locks", stem):
                 continue

@@ -74,7 +74,8 @@ class AuditStatisticsTests(unittest.TestCase):
                     "smd": (28, 140), "nasa": (81, 405), "semi": (10, 450)}
         for block, (units, pairs) in expected.items():
             with self.subTest(block=block):
-                methods = audit.load_block(ROOT / "results/final" / f"{block}_eval.csv", block)
+                methods = audit.load_block(ROOT / "results/final" / f"{block}_eval.csv", block,
+                                           nasa_cohort=audit.HISTORICAL)
                 results = audit.analyze_block(methods, block)
                 self.assertEqual((results["H1"]["n"], results["H1"]["n_pairs"]), (units, pairs))
                 self.assertEqual(results["H2"]["status"], "pending_margin")
