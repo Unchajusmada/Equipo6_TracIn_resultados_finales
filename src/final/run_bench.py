@@ -49,12 +49,12 @@ def _claim(lockdir, name: str) -> bool:
     return False
 
 
-def jobs(block):
+def jobs(block, *, nasa_first_row: bool = False):
     import data_bench as db
     if block == "smd":
         return [(f"{m}_s{s}", ("smd_" + m, s)) for s in range(SEEDS[block]) for m in db.smd_names()]
     if block == "nasa":
-        channels = db.nasa_names()
+        channels = db.nasa_names(first_row=nasa_first_row)
         return [(f"{c}_s{s}", ("nasa_" + c, s)) for s in range(SEEDS[block]) for c in channels]
     out = []
     for s in range(SEEDS[block]):
@@ -81,6 +81,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--blocks", default="smd,nasa,semi")
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--nasa-first-row", action="store_true",
+                    help="Incluye P-2 preparado con la primera fila histórica")
     a = ap.parse_args()
     import numpy as np
     import torch
@@ -90,7 +92,7 @@ def main():
     from screen import parse_variant
     cfg = Cfg(**{**parse_variant("full").__dict__, "batch": 256, "max_epochs": 50})
     for block in a.blocks.split(","):
-        for stem, spec in jobs(block):
+        for stem, spec in jobs(block, nasa_first_row=a.nasa_first_row):
             path = RES / block / f"{stem}.npz"
             if path.exists() or not _claim(RES / block / ".locks", stem):
                 continue

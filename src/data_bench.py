@@ -35,8 +35,8 @@ def semi_machines() -> list[str]:
     return smd_names()[::3]          # fijado a priori: una de cada tres (10 máquinas)
 
 
-def nasa_annotations():
-    """Agrupa filas validadas por el identificador usado para nombrar la serie."""
+def nasa_annotations(*, first_row: bool = False):
+    """Selecciona anotaciones con una política explícita para P-2."""
     root = RAW / "smap_msl"
     labels = pd.read_csv(root / "labeled_anomalies.csv", dtype=str, keep_default_na=False)
     columns = ["chan_id", "spacecraft", "num_values", "anomaly_sequences"]
@@ -63,33 +63,35 @@ def nasa_annotations():
                     or any(type(index) is not int for index in interval)
                     or not 0 <= interval[0] <= interval[1] < length):
                 raise ValueError(f"{context}: intervalo inclusivo fuera de especificación: {interval!r}")
-        previous_mission, previous_length, rows = channels.setdefault(channel, (mission, length, []))
-        if (previous_mission, previous_length) != (mission, length):
-            raise ValueError(f"{context}: misión o longitud incompatible con otra fila del canal")
-        rows.append(intervals)
+        # Telemanom #8: P-2 identifica dos secuencias de periodos distintos.
+        if channel == "P-2":
+            if first_row:
+                channels.setdefault(channel, (mission, length, intervals))
+            continue
+        if channel in channels:
+            raise ValueError(f"{context}: ID repetido sin correspondencia entre anotación y matriz")
+        channels[channel] = (mission, length, intervals)
     missing = sorted(c for c in channels if not (root / "test" / f"{c}.npy").is_file())
     if missing:
         raise FileNotFoundError(f"NASA: faltan series .npy anotadas: {', '.join(missing)}")
     return channels
 
 
-def nasa_names() -> list[str]:
-    return sorted(nasa_annotations())
+def nasa_names(*, first_row: bool = False) -> list[str]:
+    return sorted(nasa_annotations(first_row=first_row))
 
 
 def build_nasa(*, first_row: bool = False):
-    channels = nasa_annotations()
+    channels = nasa_annotations(first_row=first_row)
     OUT.mkdir(parents=True, exist_ok=True)
     rows = []
-    for channel, (mission, length, intervals_by_row) in sorted(channels.items()):
+    for channel, (mission, length, intervals) in sorted(channels.items()):
         X = np.load(RAW / "smap_msl" / "test" / f"{channel}.npy")
         if X.ndim != 2 or X.shape[0] != length or X.shape[1] == 0:
             raise ValueError(f"NASA {channel}: se esperaba una matriz con {length} pasos, forma {X.shape}")
         y = np.zeros(length, np.int8)
-        selected = intervals_by_row[:1] if first_row else intervals_by_row
-        for intervals in selected:
-            for a, b in intervals:
-                y[a:b + 1] = 1
+        for a, b in intervals:
+            y[a:b + 1] = 1
         np.savez_compressed(OUT / f"nasa_{channel}.npz", X=X.astype(np.float32), y=y, spacecraft=mission)
         rows.append((mission.lower(), channel, length, X.shape[1], y.mean()))
     return rows
@@ -177,6 +179,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--block", choices=("all", "nasa"), default="all")
     parser.add_argument("--nasa-first-row", action="store_true",
-                        help="Usa la primera fila validada de cada canal para la comparación histórica")
+                        help="Incluye P-2 con su primera fila para reproducción histórica")
     args = parser.parse_args()
     build(block=args.block, nasa_first_row=args.nasa_first_row)

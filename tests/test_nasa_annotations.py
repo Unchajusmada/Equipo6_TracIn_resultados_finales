@@ -33,36 +33,35 @@ class NasaAnnotationsTests(unittest.TestCase):
         for channel, length in lengths.items():
             np.save(self.root / "test" / f"{channel}.npy", np.zeros((length, 2), dtype=np.float32))
 
-    def test_union_overlap_disjoint_repeated_and_inclusive_boundaries(self):
-        self.fixture([("P-2", "SMAP", 12, "[[4, 6], [0, 0]]"),
-                      ("P-2", "SMAP", 12, "[[2, 5], [11, 11]]"),
-                      ("P-2", "SMAP", 12, "[[4, 6]]"),
-                      ("M-1", "MSL", 12, "[]")], {"P-2": 12, "M-1": 12, "extra": 12})
-        self.assertEqual(db.nasa_names(), ["M-1", "P-2"])
+    def test_intervals_within_one_row_and_inclusive_boundaries(self):
+        self.fixture([("A-1", "SMAP", 12, "[[4, 6], [0, 0], [2, 5], [11, 11], [4, 6]]"),
+                      ("M-1", "MSL", 12, "[]")], {"A-1": 12, "M-1": 12, "extra": 12})
+        self.assertEqual(db.nasa_names(), ["A-1", "M-1"])
         with patch.object(db, "smd_names", side_effect=AssertionError("NASA-only build")):
             db.build(block="nasa")
-        self.assertEqual(sorted(p.name for p in self.out.glob("*.npz")), ["nasa_M-1.npz", "nasa_P-2.npz"])
-        with np.load(self.out / "nasa_P-2.npz") as built:
+        self.assertEqual(sorted(p.name for p in self.out.glob("*.npz")), ["nasa_A-1.npz", "nasa_M-1.npz"])
+        with np.load(self.out / "nasa_A-1.npz") as built:
             np.testing.assert_array_equal(np.flatnonzero(built["y"]), [0, 2, 3, 4, 5, 6, 11])
             self.assertEqual(built["spacecraft"].item(), "SMAP")
             self.assertEqual(built["y"].dtype, np.int8)
         with (self.out / "resumen.csv").open(encoding="utf-8", newline="") as stream:
-            self.assertEqual([row["name"] for row in csv.DictReader(stream)], ["M-1", "P-2"])
+            self.assertEqual([row["name"] for row in csv.DictReader(stream)], ["A-1", "M-1"])
 
-    def test_p2_union_vs_historical(self):
+    def test_same_id_and_length_do_not_identify_one_p2_sequence(self):
         self.fixture([("P-2", "SMAP", 8209, "[[5350, 6575]]"),
                       ("P-2", "SMAP", 8209, "[[5300, 6420]]")], {"P-2": 8209})
-        db.build_nasa()
+        self.assertEqual(db.build_nasa(), [])
+        self.assertFalse((self.out / "nasa_P-2.npz").exists())
+        db.build_nasa(first_row=True)
         with np.load(self.out / "nasa_P-2.npz") as built:
-            corrected = built["y"]
-        historical = self.out.with_name("historical")
-        with patch.object(db, "OUT", historical):
-            db.build_nasa(first_row=True)
-        with np.load(historical / "nasa_P-2.npz") as built:
-            previous = built["y"]
-        self.assertEqual(int(corrected.sum()), 1276)
-        self.assertEqual(int(previous.sum()), 1226)
-        np.testing.assert_array_equal(np.flatnonzero(corrected - previous), np.arange(5300, 5350))
+            np.testing.assert_array_equal(np.flatnonzero(built["y"]), np.arange(5350, 6576))
+
+    def test_other_repeated_ids_require_verified_mapping(self):
+        self.fixture([("A-1", "SMAP", 10, "[[0, 1]]"),
+                      ("A-1", "SMAP", 10, "[[5, 6]]")], {"A-1": 10})
+        for first_row in (False, True):
+            with self.assertRaisesRegex(ValueError, "A-1.*ID repetido"):
+                db.build_nasa(first_row=first_row)
 
     def test_invalid_intervals_rejected_even_in_historical_mode(self):
         for value in ("[[-1, 1]]", "[[2, 1]]", "[[0, 10]]", "[[0, 1.5]]", "[[0, True]]",
@@ -73,10 +72,8 @@ class NasaAnnotationsTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "P-2.*(intervalo|anomaly_sequences)"):
                     db.build_nasa(first_row=True)
 
-    def test_inconsistent_and_invalid_metadata(self):
+    def test_invalid_metadata(self):
         for row, message in [
-            (("P-2", "MSL", 10, "[]"), "incompatible"),
-            (("P-2", "SMAP", 11, "[]"), "incompatible"),
             (("P-2", "OTHER", 10, "[]"), "inválido"),
             (("P-2", "SMAP", "10.5", "[]"), "inválido"),
             (("P-2", "SMAP", 0, "[]"), "inválido"),
@@ -90,11 +87,12 @@ class NasaAnnotationsTests(unittest.TestCase):
 
     def test_missing_array_and_length_mismatch(self):
         self.fixture([("P-2", "SMAP", 10, "[]")], {})
+        self.assertEqual(db.nasa_names(), [])
         with self.assertRaisesRegex(FileNotFoundError, "P-2"):
-            db.nasa_names()
+            db.nasa_names(first_row=True)
         self.fixture([("P-2", "SMAP", 10, "[]")], {"P-2": 11})
         with self.assertRaisesRegex(ValueError, "P-2.*10 pasos"):
-            db.build_nasa()
+            db.build_nasa(first_row=True)
 
     def test_nasa_runner_schedules_each_channel_once_per_seed(self):
         self.fixture([("P-2", "SMAP", 10, "[[0, 1]]"),
@@ -108,8 +106,10 @@ class NasaAnnotationsTests(unittest.TestCase):
         with patch.dict(sys.modules, {"core": core, "data_bench": db}), patch.object(sys, "path", sys.path.copy()):
             spec.loader.exec_module(runner)
             jobs = runner.jobs("nasa")
-        self.assertEqual(len(jobs), 10)
-        self.assertEqual(dict(jobs), {f"{c}_s{s}": (f"nasa_{c}", s) for s in range(5) for c in ("M-1", "P-2")})
+            historical = runner.jobs("nasa", nasa_first_row=True)
+        self.assertEqual(jobs, [(f"M-1_s{s}", ("nasa_M-1", s)) for s in range(5)])
+        self.assertEqual(historical, [(f"{c}_s{s}", (f"nasa_{c}", s))
+                                      for s in range(5) for c in ("M-1", "P-2")])
 
 
 if __name__ == "__main__":

@@ -4,6 +4,10 @@
 
 ## Resultado
 
+**Fase de código cerrada.** La corrección de pseudorreplicación está implementada y verificada. La comprobación de cierre reprodujo exactamente los resultados por bloque del JSON de auditoría a partir de los seis CSV archivados. Pasaron las 14 pruebas de la suite, incluidas las siete estadísticas. El protocolo preregistrado original se conserva. Este documento registra las decisiones metodológicas posteriores.
+
+**Validación experimental pendiente.** H2 no demuestra no inferioridad. Sin un margen δ científicamente justificado, los seis bloques conservan las diferencias de F1 como evidencia descriptiva y H2 queda sin p de no inferioridad. Para NASA, la [sensibilidad de fase 2](AUDITORIA_FASE2_P2.md) añade el análisis principal de 80 canales y conserva aquí la comparación archivada de 81.
+
 **H2 queda sin evaluar para no inferioridad en los seis bloques.** Se recalcularon las diferencias de F1, pero el protocolo carece de un margen de pérdida admisible. El resultado histórico bilateral sigue disponible como contraste de diferencia. La cercanía a cero del efecto semisintético y su p histórico de 0.557 dejan abierta la cuestión de no inferioridad.
 
 **La evidencia en los cuatro reales originales es descriptiva entre datasets.** El método final mejora la AP en los cuatro datasets y pierde F1 frente a la referencia dinámica en tres. El IC y p históricos basados en 40 pares de semillas se muestran solo como antecedente. En semi, la unidad pasa de 450 filas a 10 fondos para H1–H3/H5a–b y de 90 pares de caídas a 10 fondos para H4r/H5c.
