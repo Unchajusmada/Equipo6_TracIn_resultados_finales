@@ -1,0 +1,26 @@
+\begin{table}[t]
+\centering\small
+\caption{Sintéticos (15 datasets $\times$ 20 semillas, $L{=}4$, $P{=}1$). Media $\pm$ d.e. $\Delta$: diferencia pareada frente al artículo (AUPRC) y frente al artículo con umbral dinámico que usa etiquetas (F1); * $p<0.05$, ** $p<0.01$, *** $p<0.001$ (Wilcoxon).}
+\label{tab:synth}
+\begin{tabular}{lcccccc}
+\toprule
+Método & Etiq. & AUPRC & AUROC & F1 bin. & F1 macro & $\Delta$AUPRC / $\Delta$F1 \\
+\midrule
+Artículo (estático) & no & 0.576{\scriptsize$\pm$0.21} & 0.894 & 0.463{\scriptsize$\pm$0.20} & 0.692 & -- / -0.006 \\
+Artículo (dinámico, etiquetas) & sí & 0.576{\scriptsize$\pm$0.21} & 0.894 & 0.469{\scriptsize$\pm$0.23} & 0.697 & -- / -- \\
+\midrule
+M1 & no & 0.576{\scriptsize$\pm$0.21} & 0.894 & 0.481{\scriptsize$\pm$0.25} & 0.708 & -- / +0.012 \\
+M2 suave & no & 0.601{\scriptsize$\pm$0.23} & 0.897 & 0.468{\scriptsize$\pm$0.20} & 0.695 & +0.026*** / -0.001 \\
+M2 recorte & no & 0.596{\scriptsize$\pm$0.23} & 0.896 & 0.464{\scriptsize$\pm$0.20} & 0.692 & +0.021*** / -0.005 \\
+M3 & no & 0.782{\scriptsize$\pm$0.14} & 0.914 & 0.568{\scriptsize$\pm$0.21} & 0.753 & +0.206*** / +0.098*** \\
+M1+M3 & no & 0.782{\scriptsize$\pm$0.14} & 0.914 & 0.665{\scriptsize$\pm$0.22} & 0.815 & +0.206*** / +0.196*** \\
+M2+M3 & no & 0.788{\scriptsize$\pm$0.16} & 0.918 & 0.577{\scriptsize$\pm$0.22} & 0.758 & +0.212*** / +0.108*** \\
+M1+M2 & no & 0.599{\scriptsize$\pm$0.23} & 0.897 & 0.493{\scriptsize$\pm$0.26} & 0.714 & +0.024*** / +0.023 \\
+\midrule
+M1+M2+M3 (z$>$2) & no & 0.788{\scriptsize$\pm$0.16} & 0.918 & 0.684{\scriptsize$\pm$0.22} & 0.825 & +0.212*** / +0.215*** \\
+\textbf{M1+M2+M3 (final)} & no & \textbf{0.791{\scriptsize$\pm$0.16}} & \textbf{0.919} & \textbf{0.687{\scriptsize$\pm$0.22}} & \textbf{0.827} & +0.215*** / +0.218*** \\
+\midrule
+Error LSTM + IQR & no & 0.698{\scriptsize$\pm$0.16} & 0.865 & 0.614{\scriptsize$\pm$0.20} & 0.788 & +0.122*** / +0.145*** \\
+\bottomrule
+\end{tabular}
+\end{table}

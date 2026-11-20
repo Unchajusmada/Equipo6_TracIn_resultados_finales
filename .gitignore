@@ -1,0 +1,83 @@
+
+# =====================================
+# PYTHON
+# =====================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Cachés y pruebas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# =====================================
+# DATOS EXPERIMENTALES PESADOS
+# =====================================
+/data/raw/
+/data/processed/
+/data/cache/
+
+# Resultados intermedios de entrenamiento
+# Conservamos los CSV, JSON y tablas finales
+/results/**/*.npz
+/results/**/.locks/
+
+# Checkpoints y pesos de modelos
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# =====================================
+# JUPYTER / COLAB
+# =====================================
+.ipynb_checkpoints/
+
+# =====================================
+# LATEX
+# =====================================
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+
+# =====================================
+# ARCHIVOS LOCALES Y TEMPORALES
+# =====================================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+
+# Configuración local del editor
+.vscode/
+.idea/
+
+# =====================================
+# CREDENCIALES
+# =====================================
+.env
+.env.*
+!.env.example
+
+# =====================================
+# BIBLIOGRAFÍA DESCARGADA LOCALMENTE
+# =====================================
+/Referencias.zip
+/papers_locales/
+/referencias_pdfs/

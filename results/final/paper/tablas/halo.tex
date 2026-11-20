@@ -1,0 +1,28 @@
+\begin{table}[t]
+\centering\small
+\caption{Mecanismo de la mejora 3. Halo: instantes normales a distancia $1..L{+}P{-}1$ de una anomalía. Top-$k$: los $k$ instantes con mayor score, $k$ = número de anomalías.}
+\label{tab:halo}
+\begin{tabular}{llccccc}
+\toprule
+Datos & Proyección & \makecell{AUROC\\anom.\ vs.\ halo} & \makecell{AUROC\\anom.\ vs.\ lejanos} & \makecell{Top-$k$\\en halo} & \makecell{Top-$k$\\anómalos} \\
+\midrule
+Sintéticos & ventana (artículo) & 0.759 & 0.957 & 42.3\% & 54.8\% \\
+ & objetivo (M3) & 0.884 & 0.922 & 14.1\% & 72.0\% \\
+\midrule
+Contaminación & ventana (artículo) & 0.698 & 0.951 & 49.6\% & 49.3\% \\
+ & objetivo (M3) & 0.866 & 0.910 & 14.9\% & 69.9\% \\
+\midrule
+Reales (4) & ventana (artículo) & 0.573 & 0.766 & 27.4\% & 25.2\% \\
+ & objetivo (M3) & 0.664 & 0.774 & 16.5\% & 27.5\% \\
+\midrule
+SMD & ventana (artículo) & 0.594 & 0.875 & 4.2\% & 45.6\% \\
+ & objetivo (M3) & 0.712 & 0.851 & 1.5\% & 40.5\% \\
+\midrule
+SMAP+MSL & ventana (artículo) & 0.582 & 0.580 & 0.5\% & 20.5\% \\
+ & objetivo (M3) & 0.584 & 0.576 & 0.3\% & 19.0\% \\
+\midrule
+Semisintético & ventana (artículo) & 0.585 & 0.665 & 34.8\% & 23.0\% \\
+ & objetivo (M3) & 0.644 & 0.676 & 22.9\% & 27.2\% \\
+\bottomrule
+\end{tabular}
+\end{table}

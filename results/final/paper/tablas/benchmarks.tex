@@ -1,0 +1,27 @@
+\begin{table*}[t]
+\centering\small
+\caption{Benchmarks reales adicionales (5 semillas por serie; media de las medias por serie). $^{\uparrow}$/$^{\downarrow}$: diferente del artículo con $p<0.05$ (Wilcoxon pareado entre series; F1 frente al artículo con umbral dinámico con etiquetas).}
+\label{tab:bench}
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{3}{c}{SMD ($n=28$ series)} & \multicolumn{3}{c}{SMAP+MSL ($n=81$ series)} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+Método & AUPRC & AUROC & F1 bin. & AUPRC & AUROC & F1 bin. \\
+\midrule
+Artículo (estático) & 0.454 & \textbf{0.873} & 0.307 & 0.209 & 0.580 & 0.133$^{\downarrow}$ \\
+Artículo (dinámico, etiquetas) & 0.454 & \textbf{0.873} & \textbf{0.340} & 0.209 & 0.580 & \textbf{0.254} \\
+\midrule
+M1 & 0.454 & \textbf{0.873} & 0.313 & 0.209 & 0.580 & 0.157$^{\downarrow}$ \\
+M2 recorte & 0.449 & 0.856$^{\downarrow}$ & 0.297 & 0.220$^{\uparrow}$ & 0.610$^{\uparrow}$ & 0.137$^{\downarrow}$ \\
+M3 & 0.400$^{\downarrow}$ & 0.851$^{\downarrow}$ & 0.288 & 0.188$^{\downarrow}$ & 0.576 & 0.130$^{\downarrow}$ \\
+M1+M3 & 0.400$^{\downarrow}$ & 0.851$^{\downarrow}$ & 0.288 & 0.188$^{\downarrow}$ & 0.576 & 0.172$^{\downarrow}$ \\
+M1+M2 & \textbf{0.472} & 0.859$^{\downarrow}$ & 0.309 & 0.220$^{\uparrow}$ & 0.606 & 0.163$^{\downarrow}$ \\
+\midrule
+\textbf{M1+M2+M3 (final)} & 0.392$^{\downarrow}$ & 0.825$^{\downarrow}$ & 0.269 & 0.203 & 0.605 & 0.183$^{\downarrow}$ \\
+\midrule
+Error LSTM + IQR & 0.225$^{\downarrow}$ & 0.777$^{\downarrow}$ & 0.231$^{\downarrow}$ & 0.158$^{\downarrow}$ & 0.514$^{\downarrow}$ & 0.152$^{\downarrow}$ \\
+LOF + IQR & 0.104$^{\downarrow}$ & 0.620$^{\downarrow}$ & 0.143$^{\downarrow}$ & 0.162$^{\downarrow}$ & 0.528$^{\downarrow}$ & 0.244 \\
+IForest + IQR & 0.371$^{\downarrow}$ & 0.826$^{\downarrow}$ & 0.327 & \textbf{0.231$^{\uparrow}$} & \textbf{0.650$^{\uparrow}$} & 0.118$^{\downarrow}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}

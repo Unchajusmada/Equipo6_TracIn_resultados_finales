@@ -1,0 +1,25 @@
+% Preámbulo con respaldos: compila con una instalación mínima de TeX Live
+% (sin booktabs/makecell/babel-spanish); en Overleaf toma los paquetes reales.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage[margin=2.2cm]{geometry}
+\IfFileExists{spanish.ldf}{\usepackage[spanish,es-noshorthands,es-tabla]{babel}}{}
+\IfFileExists{booktabs.sty}{\usepackage{booktabs}}{}
+\IfFileExists{makecell.sty}{\usepackage{makecell}}{}
+\IfFileExists{caption.sty}{\usepackage[font=small,labelfont=bf]{caption}}{}
+\IfFileExists{etoolbox.sty}{\usepackage[hidelinks]{hyperref}}{}
+\makeatletter
+\@ifundefined{toprule}{%
+  \def\toprule{\hline\hline}\def\midrule{\hline}\def\bottomrule{\hline\hline}%
+  \def\cmidrule(#1)#2{\cline{#2}}}{}
+\@ifundefined{makecell}{\def\makecell#1{\begin{tabular}{@{}c@{}}#1\end{tabular}}}{}
+\@ifundefined{text}{\def\text#1{\mbox{#1}}}{}
+\makeatother
+\AtBeginDocument{\renewcommand{\tablename}{Tabla}\renewcommand{\figurename}{Figura}%
+  \renewcommand{\refname}{Referencias}\renewcommand{\abstractname}{Resumen}}
+\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{4.5pt}

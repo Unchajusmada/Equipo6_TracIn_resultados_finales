@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering\small
+\caption{Diseño factorial en sintéticos: efecto de cada pieza.}
+\label{tab:fact}
+\begin{tabular}{llccccc}
+\toprule
+& & & & \multicolumn{3}{c}{F1 binario según umbral} \\ \cmidrule(lr){5-7}
+Entrenamiento & Proyección & AUPRC & AUROC & Estático & Dinámico$^\dagger$ & IQR (M1) \\
+\midrule
+Ninguno (artículo) & ventana & 0.576 & 0.894 & 0.463 & 0.469 & 0.481 \\
+ & objetivo (M3) & 0.782 & 0.914 & 0.568 & 0.649 & 0.665 \\
+\midrule
+Suave $z>2$ & ventana & 0.601 & 0.897 & 0.468 & 0.468 & 0.489 \\
+ & objetivo (M3) & 0.799 & 0.920 & 0.582 & 0.663 & 0.688 \\
+\midrule
+Recorte $z>2$ & ventana & 0.596 & 0.896 & 0.464 & 0.466 & 0.491 \\
+ & objetivo (M3) & 0.788 & 0.918 & 0.577 & 0.663 & 0.684 \\
+\midrule
+Recorte IQR (M1+M2) & ventana & 0.599 & 0.897 & 0.468 & 0.465 & 0.493 \\
+ & objetivo (M3) & 0.791 & 0.919 & 0.580 & 0.660 & 0.687 \\
+\bottomrule
+\end{tabular}
+\\[2pt]{\footnotesize $^\dagger$ umbral elegido con etiquetas en la primera mitad (protocolo del artículo).}
+\end{table}

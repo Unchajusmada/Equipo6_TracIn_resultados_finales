@@ -1,0 +1,303 @@
+\documentclass[10pt,a4paper]{article}
+\input{preambulo}
+\input{tablas/macros}
+\graphicspath{{figs/}}
+\title{Resultados experimentales\\[2pt]\large Mejoras a la detección de anomalías por autoinfluencia (TracIn):\\
+umbral IQR, recorte adaptativo y proyección al objetivo}
+\author{Equipo 6 --- INAOE, Aprendizaje no supervisado}
+\date{18 de noviembre de 2026}
+
+\newcommand{\MI}{M1}\newcommand{\MII}{M2}\newcommand{\MIII}{M3}
+\newcommand{\Fin}{M1+M2+M3}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Evaluamos por separado y en conjunto tres modificaciones al detector de anomalías basado en autoinfluencia
+TracIn de Verdone et al.\ (2026): \MI, un umbral IQR que no usa etiquetas; \MII, un reentrenamiento que recorta
+o repondera las ventanas de mayor influencia; y \MIII, una proyección del score de cada ventana sólo al instante
+que predice (en lugar de a toda la ventana, Ec.~4 del artículo). El protocolo, las hipótesis y los
+hiperparámetros se fijaron antes de correr los experimentos. Usamos seis bloques de datos: sintéticos,
+contaminación controlada, los cuatro datasets reales del artículo, SMD, SMAP+MSL y contaminación semisintética
+sobre fondo real; en total \Nr{total} corridas.
+\MIII{} es la mejora dominante y la que más reduce la degradación con la contaminación: la caída de AUROC
+de 1\,\% a 30\,\% de anomalías pasa de \Dr{contam}{art}{drop} (artículo) a \Dr{contam}{m3}{drop} (\MIII{}) y
+\Dr{contam}{fin}{drop} (método final). El mecanismo es un ``halo'' de falsos positivos alrededor de cada
+anomalía que la Ec.~4 crea y \MIII{} elimina. Reportamos también los casos en que las mejoras \emph{no}
+funcionan: con anomalías de patrón largas \MIII{} sola empeora el AUROC; en los benchmarks SMD y SMAP/MSL,
+cuyas anomalías son tramos de cientos de pasos, la combinación no supera al artículo (SMD: AUPRC
+\Hy{smd}{H1}{mean}, no significativo) y la mejor variante es \MI+\MII{} sin \MIII{}; y en datos reales con
+anomalías raras el umbral IQR sin etiquetas no alcanza el F1 del umbral del artículo calibrado con etiquetas.
+La ventaja de \MIII{} crece con la tasa natural de anomalías en las 109 series reales (Spearman
+$\rho=$ \Hs{rho}{auprc}, $p$ \Hs{p}{auprc}).
+\end{abstract}
+
+% ======================================================================
+\section{Configuración experimental}
+
+\paragraph{Métodos.} Todos comparten el mismo LSTM, la misma ventana ($L{=}4$, $P{=}1$) y la misma
+configuración del artículo reproducida (gradiente de la última capa en sintéticos; de todos los parámetros,
+batch 256 y 50 épocas máximo en datos reales). Cada método combina tres piezas independientes:
+\emph{entrenamiento} (artículo; \MII{} suave: repondera las ventanas con $z>2$ durante dos rondas; \MII{}
+recorte: las elimina; recorte adaptativo: elimina las que superan el umbral IQR, tres rondas),
+\emph{proyección} (Ec.~4 del artículo, suma sobre la ventana; \MIII{}, promedio sólo sobre los instantes
+predichos) y \emph{umbral} (estático del artículo, percentil 85/87; dinámico del artículo, elegido con
+etiquetas en la primera mitad; \MI{}, $Q_3+1.5\,\mathrm{IQR}$ sin etiquetas). El \textbf{método final} es
+recorte adaptativo + \MIII{} + \MI{} y no usa ninguna etiqueta. Como referencia se incluyen el error de
+predicción del mismo LSTM, LOF e Isolation Forest (los dos últimos con umbral IQR).
+
+\paragraph{Datos.} La Tabla~\ref{tab:datos} resume los seis bloques. Los tres últimos se agregaron con un
+protocolo escrito antes de descargar los datos (\texttt{PROTOCOLO\_FINAL.md}), porque con cuatro datasets
+reales la generalización entre datasets no se puede probar con un $p$-valor.
+
+\begin{table}[t]
+\centering\small
+\caption{Bloques de evaluación. Unidad: lo que se trata como observación independiente en las pruebas.}
+\label{tab:datos}
+\begin{tabular}{llll}
+\toprule
+Bloque & Contenido & Corridas & Unidad estadística \\
+\midrule
+Sintéticos & 15 series de Lai et al.\ (2021), 400 pasos & 15 $\times$ 20 semillas & (serie, semilla) \\
+Contaminación & 4000 pasos; 3 mezclas $\times$ 7 niveles (1--30\,\%) & 21 $\times$ 20 semillas & (mezcla, nivel, semilla) \\
+Reales & Credit Card, CICIDS, GECCO, SWAN-SF & 4 $\times$ 10 semillas & (dataset, semilla)$^\dagger$ \\
+SMD & 28 máquinas, 38 canales, 0.4--15.7\,\% anómalo & 28 $\times$ 5 semillas & serie (media de semillas) \\
+SMAP+MSL & 82 canales de telemetría, 0.4--50\,\% anómalo & 82 $\times$ 5 semillas & serie (media de semillas) \\
+Semisintético & 10 máquinas SMD + anomalías inyectadas & 10 $\times$ 3 $\times$ 5 $\times$ 3 & (máquina, mezcla, nivel, semilla) \\
+\bottomrule
+\end{tabular}\\[2pt]
+{\footnotesize $^\dagger$ con 4 datasets, la generalización se juzga por el signo en cada dataset, no por el $p$ agregado.}
+\end{table}
+
+\paragraph{Métricas y estadística.} Calidad del score sin umbral: AUPRC (primaria) y AUROC. Detección: F1
+binario de la clase anómala (primaria) y F1 macro, medidos en la segunda mitad de cada serie para que el
+umbral dinámico del artículo (que usa etiquetas de la primera mitad) sea comparable. Las hipótesis se prueban
+con Wilcoxon pareado, corrección de Holm dentro de cada bloque, IC\,95\,\% bootstrap de la diferencia media
+(10\,000 remuestreos), tamaño de efecto rank-biserial $r_{rb}$ y conteo de victorias. Las comparaciones
+múltiples entre métodos usan Friedman + diferencia crítica de Nemenyi ($\alpha=0.05$).
+
+\paragraph{Hipótesis (fijadas antes).} \textbf{H1} final $>$ artículo (AUPRC). \textbf{H2} final sin etiquetas
+$\geq$ artículo con umbral dinámico con etiquetas (F1). \textbf{H3} la combinación aporta: final $>$ \MIII{}
+(H3a, AUPRC) y final $>$ \MI+\MIII{} (H3b, F1). \textbf{H4} con contaminación, el final cae menos que el
+artículo. En la extensión: \textbf{H5} \MIII{} sola $>$ artículo (AUROC y AUPRC); \textbf{H5c/H4r} en el bloque
+semisintético, \MIII{} y el final caen menos que el artículo; \textbf{H6} la ventaja de \MIII{} en series reales
+crece con la tasa natural de anomalías (Spearman).
+
+% ======================================================================
+\section{Sintéticos: contribución de cada mejora}
+
+La Tabla~\ref{tab:synth} resume los 300 pares (serie, semilla). \MIII{} sola explica casi toda la mejora del
+score: el AUPRC sube de \Me{synth}{art}{auprc} a \Me{synth}{m3}{auprc} (H5b: \Hy{synth}{H5b}{mean}
+\Hy{synth}{H5b}{ci}, gana en \Hy{synth}{H5b}{wins} de \Hy{synth}{H5b}{n}). \MII{} por sí sola aporta poco
+(\Me{synth}{m2}{auprc}) y \MI{} no cambia el score (sólo el umbral). La combinación final alcanza AUPRC
+\Me{synth}{fin}{auprc} y F1 \Me{synth}{fin}{f1}, frente a \Me{synth}{artdyn}{f1} del artículo con umbral
+dinámico \emph{que usa etiquetas}: H2 se sostiene con \Hy{synth}{H2}{mean} \Hy{synth}{H2}{ci}
+($p_{\text{Holm}}$ \Hy{synth}{H2}{ph}). La Tabla~\ref{tab:fact} separa los tres factores: el salto grande en
+AUPRC viene de cambiar la proyección (ventana $\to$ objetivo) con cualquier entrenamiento, y el salto en F1
+aparece sólo cuando se combina \MIII{} con un umbral razonable (el umbral estático desperdicia parte de la
+mejora del score; \MI{} la recupera sin etiquetas).
+
+Las piezas se complementan: \MI{} sola apenas cambia el F1 (\Me{synth}{m1}{f1}) porque el score de la Ec.~4 está
+dominado por el halo (Sección~\ref{sec:mec}); \MI{} sobre \MIII{} sube a \Me{synth}{m1m3}{f1}. El recorte agrega
+una mejora pequeña pero muy consistente (H3a: \Hy{synth}{H3a}{mean}, \Hy{synth}{H3a}{wins}/\Hy{synth}{H3a}{n};
+H3b: \Hy{synth}{H3b}{mean} en F1, ambas $p_{\text{Holm}}$ \Hy{synth}{H3b}{ph}).
+
+\paragraph{Frente al protocolo completo del artículo.} El artículo elige la mejor configuración $(L,P)$ de
+nueve con etiquetas. Aun dándole esa ventaja, el método final con $L{=}4,P{=}1$ fijos y sin etiquetas lo
+supera en F1 por \Pp{synth}{f1}{mean} \Pp{synth}{f1}{ci} (\Pp{synth}{f1}{wins}/\Pp{synth}{f1}{n},
+$p$ \Pp{synth}{f1}{p}) y en AUPRC por \Pp{synth}{auprc}{mean} \Pp{synth}{auprc}{ci}.
+
+\input{tablas/sinteticos}
+\input{tablas/factorial_synth}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.8\linewidth]{cd_synth_auprc}\\[4pt]
+\includegraphics[width=.8\linewidth]{cd_contam_auroc}
+\caption{Rango medio (Friedman + Nemenyi, $\alpha=0.05$; menor es mejor). Arriba: AUPRC en sintéticos
+(N = 15 series, $p$ \Fr{synth}{auprc}{p}). Abajo: AUROC en contaminación (N = 21 celdas mezcla $\times$ nivel,
+$p$ \Fr{contam}{auroc}{p}). Métodos unidos por una barra no difieren significativamente.}
+\label{fig:cd}
+\end{figure}
+
+% ======================================================================
+\section{Robustez a la contaminación}\label{sec:contam}
+
+El punto débil del método del artículo es que el LSTM aprende las anomalías cuando éstas son frecuentes.
+Con contaminación controlada del 1\,\% al 30\,\%, el AUROC del artículo cae \Dr{contam}{art}{drop}
+\Dr{contam}{art}{ci} (Tabla~\ref{tab:contam}, Figura~\ref{fig:contam}). Todas las variantes con \MIII{}
+caen bastante menos: \MIII{} sola \Dr{contam}{m3}{drop}, \MII+\MIII{} \Dr{contam}{m2m3}{drop} y el método
+final \Dr{contam}{fin}{drop}, es decir, \Dr{contam}{fin}{vs} menos que el artículo (H4 se sostiene en
+\Hy{contam}{H4}{wins} de \Hy{contam}{H4}{n} pares, $p_{\text{Holm}}$ \Hy{contam}{H4}{ph}). El recorte sin
+\MIII{} sí reduce la caída, pero poco (\MII{}: \Dr{contam}{m2}{drop}; \MI+\MII{}: \Dr{contam}{m1m2}{drop}).
+Sólo Isolation Forest cae tan poco como el final (\Dr{contam}{ifo}{drop}), pero parte de un AUROC mucho más
+bajo (Tabla~\ref{tab:contam}). Sobre todos los niveles juntos, las cuatro hipótesis primarias se sostienen con
+$p_{\text{Holm}}<10^{-10}$ (Tabla~\ref{tab:hip}); H1: \Hy{contam}{H1}{mean} de AUPRC,
+\Hy{contam}{H1}{wins}/\Hy{contam}{H1}{n}.
+
+\paragraph{Por tipo de anomalía.} El efecto depende fuertemente de la mezcla (Figura~\ref{fig:contam}).
+Con anomalías \emph{puntuales} (mezcla 01) \MIII{} gana en las 7 celdas de nivel (AUROC
+\Ce{contam}{m3}{auroc}{01}{mean} en promedio, AUPRC \Ce{contam}{m3}{auprc}{01}{mean}) y el método final se
+mantiene prácticamente plano (caída \Dr{contam}{fin}{d01} frente a \Dr{contam}{art}{d01} del artículo). Con
+anomalías \emph{de patrón} (mezcla 234: shapelet, estacional, tendencia), en cambio, \MIII{} sola es
+\textbf{peor} que el artículo en AUROC en \Ce{contam}{m3}{auroc}{234}{neg} de \Ce{contam}{m3}{auroc}{234}{n}
+celdas (\Ce{contam}{m3}{auroc}{234}{mean} en promedio) y en F1 (\Ce{contam}{m3}{f1}{234}{mean}); su AUPRC no
+cambia significativamente (\Ce{contam}{m3}{auprc}{234}{mean}). El recorte corrige buena parte de esa pérdida:
+el método final queda cerca del artículo en AUROC (\Ce{contam}{fin}{auroc}{234}{mean}; diferencia
+significativa sólo en \Ce{contam}{fin}{auroc}{234}{neg} de 7 celdas, las de menor contaminación) y lo supera
+en AUPRC (\Ce{contam}{fin}{auprc}{234}{mean}, significativo en \Ce{contam}{fin}{auprc}{234}{pos} de 7), pero
+sigue por debajo en F1 (\Ce{contam}{fin}{f1}{234}{mean}). La Sección~\ref{sec:mec} explica por qué.
+
+\input{tablas/contam_auroc}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{contaminacion}
+\caption{Contaminación controlada: AUROC (arriba) y AUPRC (abajo) frente a la proporción real de instantes
+anómalos, por mezcla. Bandas: IC\,95\,\% sobre 20 semillas. Más plano = más robusto.}
+\label{fig:contam}
+\end{figure}
+
+% ======================================================================
+\section{Mecanismo: el halo de la Ec.~4}\label{sec:mec}
+
+La Ec.~4 del artículo suma el score de cada ventana sobre sus $L+P$ instantes. Una ventana que contiene una
+anomalía en su objetivo tiene autoinfluencia alta, y esa autoinfluencia se reparte también sobre los $L$
+instantes \emph{normales} anteriores. El resultado es un ``halo'' de normales con score alto a distancia
+$1..L{+}P{-}1$ de cada anomalía. La Figura~\ref{fig:mec}a lo muestra directamente: alrededor de una anomalía
+puntual, la proyección por ventana produce una meseta falsa en los desfases $-4..-1$, mientras que \MIII{}
+deja un pico en el instante anómalo. La Tabla~\ref{tab:halo} lo cuantifica sin usar las etiquetas en ningún
+método (sólo para el análisis): en sintéticos, la capacidad de separar anomalías de su halo (AUROC anom.\ vs.\
+halo) sube de \Ha{synth}{win}{halo} a \Ha{synth}{tgt}{halo}, y la fracción del top-$k$ ocupada por normales
+del halo baja de \Ha{synth}{win}{topk} a \Ha{synth}{tgt}{topk}.
+
+\paragraph{Por qué el halo explica la caída con la contaminación.} El AUROC global es, aproximadamente, una
+mezcla del AUROC frente a normales lejanas y del AUROC frente al halo, ponderada por la fracción de normales
+que caen en el halo. Esa fracción crece con la contaminación: con anomalías puntuales pasa de
+\Hr{contam}{01}{1}{win}{frac} de las normales al 1\,\% a \Hr{contam}{01}{30}{win}{frac} al 30\,\%. Con la Ec.~4
+el AUROC frente al halo es bajo (\Hr{contam}{01}{30}{win}{halo} al 30\,\%), así que el AUROC global converge a
+ese valor: el del artículo pasa de \Cu{contam}{01}{art}{1} a \Cu{contam}{01}{art}{30}, prácticamente el AUROC
+frente al halo. Con \MIII{} el AUROC frente al halo se mantiene en \Hr{contam}{01}{30}{tgt}{halo} y el AUROC
+global queda en \Cu{contam}{01}{m3}{30} (caída \Cu{contam}{01}{m3}{caida} frente a \Cu{contam}{01}{art}{caida}).
+Es decir, con anomalías puntuales casi toda la degradación del artículo no se debe a que el modelo
+``aprenda'' las anomalías, sino a la proyección: cuantas más anomalías, más normales reciben el score de una
+ventana anómala vecina. Con anomalías de patrón el aprendizaje de las anomalías sí pesa, y ahí es donde
+actúa el recorte (siguiente párrafo).
+
+\paragraph{Por qué \MIII{} pierde con anomalías de patrón.} Las mismas medidas de halo explican el resultado
+negativo de la Sección~\ref{sec:contam}. Con eventos largos (10 pasos), \MIII{} sigue reduciendo el halo
+(\Hm{contam}{234}{win}{topk} $\to$ \Hm{contam}{234}{tgt}{topk} del top-$k$), pero la separación entre
+anomalías y normales \emph{lejanas} baja (\Hm{contam}{234}{win}{far} $\to$ \Hm{contam}{234}{tgt}{far}). La
+suma por ventana integra evidencia: cada instante interior de un evento recibe el score de las $L+P$ ventanas
+que lo contienen, todas anómalas. \MIII{} sólo conserva la ventana que lo predice, y en el interior de un
+patrón ya iniciado el LSTM lo predice relativamente bien. La Figura~\ref{fig:mec}d muestra esa caída del
+percentil del score en el interior de los eventos con \MIII{}, y cómo el recorte (método final) la
+recupera: al quitar del entrenamiento las ventanas anómalas, el modelo deja de aprender el patrón y su
+interior vuelve a ser difícil de predecir. Con el recorte, la separación frente a normales lejanas vuelve a
+\Hm{contam}{234}{fintgt}{far}, manteniendo el halo bajo (\Hm{contam}{234}{fintgt}{topk}). \MIII{} intercambia,
+por tanto, integración de evidencia por localización temporal: gana claramente cuando las anomalías son
+cortas o cuando el halo domina (contaminación alta), y necesita el recorte cuando son eventos largos.
+
+\input{tablas/halo}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{mecanismo}
+\caption{Mecanismo de \MIII{}. (a) Respuesta media del score (percentil dentro de la serie) alrededor de una
+anomalía puntual aislada: la proyección por ventana crea una meseta en los $L$ instantes anteriores. (b)
+Fracción del top-$k$ ocupada por normales del halo, por mezcla. (c) Anomalías de patrón: AUROC frente a
+normales vecinas y lejanas. (d) Percentil del score a lo largo de los eventos de $\geq 8$ pasos.}
+\label{fig:mec}
+\end{figure}
+
+% ======================================================================
+\section{Datos reales del artículo}
+
+En los cuatro datasets reales (Tabla~\ref{tab:real}, Figura~\ref{fig:real}) el método final mejora el AUPRC
+del artículo en las \Hy{real}{H1}{wins} de \Hy{real}{H1}{n} corridas (H1: \Hy{real}{H1}{mean}
+\Hy{real}{H1}{ci}) y en cada dataset por separado (10/10 semillas en los cuatro). La mejora relativa es grande
+en Credit Card (\Rt{creditcard}{fin}{auprc}{mean}, de \Rt{creditcard}{fin}{auprc}{b} a \Rt{creditcard}{fin}{auprc}{a}) y GECCO (\Rt{gecco}{fin}{auprc}{mean}),
+moderada en SWAN-SF (\Rt{swan_sf}{fin}{auprc}{mean}) e irrelevante en CICIDS, donde ningún método supera de
+forma útil a la tasa base (1.3\,\%). Las piezas no aportan igual en cada dataset: \MIII{} sola gana en Credit Card
+(\Rt{creditcard}{m3}{auprc}{mean}) y SWAN-SF (\Rt{swan_sf}{m3}{auprc}{mean}) pero pierde en GECCO
+(\Rt{gecco}{m3}{auprc}{mean}) y CICIDS (\Rt{cicids}{m3}{auprc}{mean}); en GECCO la mejora viene del recorte.
+H5 se sostiene en el agregado (H5b: \Hy{real}{H5b}{mean}, $p_{\text{Holm}}$ \Hy{real}{H5b}{ph}), pero con dos
+datasets a favor y dos en contra no es evidencia de generalidad. Ésa es la razón de los bloques de la
+Sección~\ref{sec:bench}.
+
+\paragraph{Resultado negativo: el umbral sin etiquetas en datos reales.} H2 \textbf{no} se sostiene en reales:
+el F1 del método final queda \Hy{real}{H2}{mean} por debajo del artículo con umbral dinámico calibrado con
+etiquetas ($p_{\text{Holm}}$ \Hy{real}{H2}{ph}). La causa es el umbral, no el score: en Credit Card, CICIDS y
+GECCO las anomalías son el 0.2--1.3\,\% de los instantes, pero la regla IQR marca entre el 10 y el 17\,\%
+(colas pesadas del score), y la precisión colapsa. El umbral dinámico del artículo resuelve esto
+usando etiquetas, cosa que nuestro método evita por diseño. Con anomalías frecuentes (SWAN-SF, 24\,\%) la
+diferencia es menor (\Rt{swan_sf}{fin}{f1_bin}{mean}). No ajustamos $k$ del IQR a la vista de este
+resultado; un umbral sin etiquetas adecuado para tasas muy bajas queda como trabajo futuro.
+
+\input{tablas/reales}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.95\linewidth]{reales}
+\caption{Datos reales: diferencia pareada por semilla frente al artículo. Izq.: AUPRC. Der.: F1 binario frente
+al artículo con umbral dinámico calibrado con etiquetas.}
+\label{fig:real}
+\end{figure}
+
+% ======================================================================
+\clearpage
+\section{Benchmarks reales adicionales: SMD y SMAP+MSL}\label{sec:bench}
+
+\input{seccion_bench}
+
+% ======================================================================
+\clearpage
+\section{Contaminación sobre fondo real}\label{sec:semi}
+
+\input{seccion_semi}
+
+% ======================================================================
+\clearpage
+\section{Resumen de hipótesis}
+
+La Tabla~\ref{tab:hip} reúne todas las pruebas preregistradas; la Tabla~\ref{tab:h5} agrega H5 en los bloques
+originales (familia de Holm aparte, para no alterar las familias H1--H4 fijadas antes).
+
+\input{tablas/hipotesis}
+\input{tablas/h5_originales}
+
+% ======================================================================
+\section{Amenazas a la validez y limitaciones}
+
+\begin{itemize}
+\item \textbf{Escenario transductivo.} Como en el artículo, el modelo se entrena sobre la misma serie que se
+puntúa. En SMD y SMAP/MSL usamos la partición de prueba (la única con etiquetas); no evaluamos el escenario
+entrenamiento limpio $\to$ prueba.
+\item \textbf{Etiquetas imperfectas.} Las etiquetas de SMD y SMAP/MSL marcan intervalos largos; el F1 por
+instantes penaliza a los métodos que localizan bien el inicio pero no todo el intervalo. No usamos
+\emph{point adjustment}, que infla las métricas.
+\item \textbf{Análisis vistos antes de la extensión.} Los resultados parciales de sintéticos y contaminación
+se vieron antes de escribir la extensión preregistrada (SMD, SMAP/MSL, semisintético). Los análisis
+secundarios (Friedman, halo, celdas) se escribieron después de ver resultados parciales y se reportan como
+exploratorios. Ningún hiperparámetro se ajustó con los resultados de esta evaluación.
+\item \textbf{Pocos datasets en el bloque del artículo.} Con cuatro datasets, los $p$-valores sobre
+(dataset, semilla) tratan las semillas como independientes; la evidencia entre datasets es el signo por
+dataset. SMD y SMAP/MSL (109 series, unidad = serie) corrigen esto.
+\item \textbf{Resultados negativos.} \MIII{} sola empeora con anomalías de patrón; el umbral IQR sin
+etiquetas no alcanza al umbral calibrado con etiquetas cuando las anomalías son muy raras; en CICIDS ningún
+método funciona.
+\item \textbf{Una sola arquitectura y ventana.} Todas las conclusiones son para el LSTM y $L{=}4,P{=}1$ del
+artículo.
+\end{itemize}
+
+% ======================================================================
+\section{Conclusiones}
+\input{seccion_conclusiones}
+
+\paragraph{Reproducibilidad.} Código en \texttt{src/final/} (\texttt{run\_synth.py}, \texttt{run\_contam.py},
+\texttt{run\_real.py}, \texttt{run\_bench.py}, \texttt{evaluate.py}, \texttt{stats.py}, \texttt{paper.py},
+\texttt{macros.py}); protocolo en \texttt{PROTOCOLO\_FINAL.md}. Todas las cifras del texto se generan desde
+\texttt{results/final/final\_numbers.json} y \texttt{paper/numeros.json}.
+
+\end{document}

@@ -1,0 +1,21 @@
+\begin{table*}[t]
+\centering\small
+\caption{Contaminación controlada sintética (promedio de las tres mezclas, 20 semillas). Caída: AUROC(1\%) $-$ AUROC(30\%). «vs.\ artículo»: cuánto menos cae que el artículo (Wilcoxon pareado, * $p_{\text{Holm}}<0.05$).}
+\label{tab:contam}
+\begin{tabular}{lccccccccc}
+\toprule
+& \multicolumn{7}{c}{AUROC por proporción nominal de anomalías} & & \\ \cmidrule(lr){2-8}
+Método & 1\% & 5\% & 10\% & 15\% & 20\% & 25\% & 30\% & Caída & vs.\ artículo \\
+\midrule
+Artículo & \textbf{0.954} & 0.917 & 0.877 & 0.843 & 0.821 & 0.799 & 0.784 & 0.170 & -- \\
+M2 recorte & 0.951 & 0.928 & 0.896 & 0.863 & 0.840 & 0.819 & 0.801 & 0.150 & +0.020* \\
+M1+M2 & 0.950 & 0.927 & 0.898 & 0.868 & 0.846 & 0.825 & 0.810 & 0.140 & +0.030* \\
+M3 & 0.946 & 0.932 & 0.913 & 0.893 & 0.885 & 0.872 & 0.864 & 0.083 & +0.087* \\
+M2+M3 & 0.944 & \textbf{0.946} & 0.938 & 0.918 & 0.910 & 0.898 & 0.890 & 0.054 & +0.115* \\
+\textbf{Final (M1+M2+M3)} & 0.942 & \textbf{0.947} & \textbf{0.941} & \textbf{0.925} & \textbf{0.918} & \textbf{0.907} & \textbf{0.900} & 0.043 & +0.127* \\
+Error LSTM & 0.899 & 0.874 & 0.858 & 0.846 & 0.834 & 0.825 & 0.817 & 0.082 & +0.088* \\
+LOF & 0.913 & 0.904 & 0.859 & 0.808 & 0.777 & 0.765 & 0.747 & 0.166 & +0.004 \\
+IForest & 0.830 & 0.814 & 0.805 & 0.802 & 0.803 & 0.798 & 0.794 & 0.036 & +0.133* \\
+\bottomrule
+\end{tabular}
+\end{table*}

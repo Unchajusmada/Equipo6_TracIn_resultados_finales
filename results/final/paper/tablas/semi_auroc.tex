@@ -1,0 +1,21 @@
+\begin{table*}[t]
+\centering\small
+\caption{Contaminación semisintética sobre fondo real SMD (10 máquinas, tres mezclas, 3 semillas). Caída: AUROC(1\%) $-$ AUROC(30\%). «vs.\ artículo»: cuánto menos cae que el artículo (Wilcoxon pareado, * $p_{\text{Holm}}<0.05$).}
+\label{tab:semi}
+\begin{tabular}{lccccccc}
+\toprule
+& \multicolumn{5}{c}{AUROC por proporción nominal de anomalías} & & \\ \cmidrule(lr){2-6}
+Método & 1\% & 5\% & 10\% & 20\% & 30\% & Caída & vs.\ artículo \\
+\midrule
+Artículo & 0.641 & 0.635 & 0.633 & 0.628 & 0.627 & 0.014 & -- \\
+M2 recorte & 0.648 & 0.640 & 0.638 & 0.630 & 0.630 & 0.018 & -0.005* \\
+M1+M2 & 0.650 & 0.641 & 0.639 & 0.631 & 0.630 & 0.020 & -0.006* \\
+M3 & 0.668 & 0.663 & 0.665 & 0.666 & 0.670 & -0.002 & +0.016* \\
+M2+M3 & 0.679 & 0.675 & 0.676 & 0.675 & 0.680 & -0.001 & +0.015* \\
+\textbf{Final (M1+M2+M3)} & 0.681 & 0.677 & 0.678 & 0.678 & 0.683 & -0.003 & +0.017* \\
+Error LSTM & 0.728 & 0.726 & 0.728 & 0.730 & 0.734 & -0.006 & +0.020* \\
+LOF & \textbf{0.785} & \textbf{0.787} & \textbf{0.788} & \textbf{0.785} & \textbf{0.768} & 0.017 & -0.003 \\
+IForest & 0.567 & 0.566 & 0.574 & 0.580 & 0.591 & -0.024 & +0.038* \\
+\bottomrule
+\end{tabular}
+\end{table*}

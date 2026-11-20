@@ -1,0 +1,22 @@
+\begin{enumerate}
+\item \textbf{La combinación de las tres mejoras resuelve el problema de las series contaminadas cuando las
+anomalías son cortas o frecuentes.} En contaminación controlada el método final mejora el AUPRC en
+\Hy{contam}{H1}{mean} (\Hy{contam}{H1}{wins} de \Hy{contam}{H1}{n} corridas) y su AUROC cae
+\Dr{contam}{fin}{drop} de 1 a 30\,\% de anomalías frente a \Dr{contam}{art}{drop} del artículo; sin usar
+etiquetas supera en F1 al artículo con umbral calibrado con etiquetas. El resultado se repite, con menor
+magnitud, sobre fondo real (bloque semisintético) y en los cuatro datasets reales del artículo
+(AUPRC \Hy{real}{H1}{mean}, \Hy{real}{H1}{wins}/\Hy{real}{H1}{n}).
+\item \textbf{\MIII{} es la pieza principal y tiene un mecanismo identificado:} la Ec.~4 crea un halo de
+falsos positivos alrededor de cada anomalía, y ese halo crece con la contaminación hasta dominar el AUROC.
+\MIII{} lo elimina.
+\item \textbf{Las tres piezas se complementan.} \MI{} da el umbral sin etiquetas; \MII{} (recorte adaptativo)
+recupera la evidencia que \MIII{} pierde en el interior de eventos largos; la combinación supera a \MIII{}
+sola en sintéticos y contaminación (H3).
+\item \textbf{Límite de aplicabilidad.} Con anomalías largas y poco frecuentes (SMD, SMAP/MSL) \MIII{} no
+ayuda o perjudica, y la mejor variante es \MI+\MII{} con la proyección original. H6 confirma en 109 series
+reales que la ventaja de \MIII{} crece con la tasa de anomalías. En la práctica: usar la combinación
+completa cuando se esperan anomalías cortas o contaminación alta; quitar \MIII{} cuando las anomalías son
+tramos largos.
+\item \textbf{El umbral sin etiquetas tiene un costo} cuando las anomalías son muy raras ($<2\,\%$): la regla
+IQR marca demasiados instantes y su F1 queda por debajo del umbral calibrado con etiquetas.
+\end{enumerate}
