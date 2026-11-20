@@ -54,7 +54,8 @@ def jobs(block):
     if block == "smd":
         return [(f"{m}_s{s}", ("smd_" + m, s)) for s in range(SEEDS[block]) for m in db.smd_names()]
     if block == "nasa":
-        return [(f"{c}_s{s}", ("nasa_" + c, s)) for s in range(SEEDS[block]) for c in db.nasa_names()]
+        channels = db.nasa_names()
+        return [(f"{c}_s{s}", ("nasa_" + c, s)) for s in range(SEEDS[block]) for c in channels]
     out = []
     for s in range(SEEDS[block]):
         for r in RATIOS:
