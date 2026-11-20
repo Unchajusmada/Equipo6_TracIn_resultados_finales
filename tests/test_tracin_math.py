@@ -122,6 +122,8 @@ class TracInMathTests(unittest.TestCase):
         adam = torch.optim.Adam
         plateau = torch.optim.lr_scheduler.ReduceLROnPlateau
         step_rates, epochs = [], []
+        shuffle = torch.Generator().manual_seed(SEED)
+        audit_weights = torch.ones(M) if weights is None else torch.as_tensor(weights)
 
         def optimizer(*args, **kwargs):
             opt = adam(*args, **kwargs)
@@ -136,7 +138,9 @@ class TracInMathTests(unittest.TestCase):
         def checkpoint(model, series, count, lookback, horizon, bs=8192):
             params = model.parameters() if cfg.grad == "full" else model.head.parameters()
             norm = squared_norm(gradients_by_window(model, series, lookback, horizon, tuple(params)))
-            self.assertEqual(step_rates, [step_rates[0]] * ((M + cfg.batch - 1) // cfg.batch))
+            batches = torch.randperm(M, generator=shuffle).split(cfg.batch)
+            expected_steps = sum(int(audit_weights[batch].sum() != 0) for batch in batches)
+            self.assertEqual(step_rates, [step_rates[0]] * expected_steps)
             loss, hsq = original_stats(model, series, count, lookback, horizon, bs)
             epochs.append((step_rates[0], norm.numpy(), loss.numpy()))
             step_rates.clear()

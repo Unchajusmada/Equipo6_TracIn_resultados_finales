@@ -158,11 +158,14 @@ def run(X: np.ndarray, L: int, P: int, seed: int, cfg: Cfg, device: str = "cpu",
         perm = tr_idx[torch.randperm(len(tr_idx), generator=gen).to(device)]
         model.train()
         for b in perm.split(cfg.batch):
+            wb = w_all[b]
+            mass = wb.sum()
+            if weights is not None and mass == 0:
+                continue
             xb, yb = windows(Xt, b, L, P)
             pred, _ = model(xb)
             l = ((pred - yb) ** 2).mean(dim=(1, 2))
-            wb = w_all[b]
-            loss = (l * wb).sum() / wb.sum().clamp_min(1e-12)
+            loss = (l * wb).sum() / mass.clamp_min(1e-12)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()

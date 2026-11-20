@@ -23,33 +23,33 @@ EDGE = 19
 # --------------------------------------------------------------------------
 # Proyección muestra -> instante
 # --------------------------------------------------------------------------
+def _sum_at_offsets(sample_scores: np.ndarray, start: int, stop: int, n: int) -> np.ndarray:
+    scores = np.asarray(sample_scores, dtype=np.float64)
+    out = np.zeros(n)
+    # Each addition touches only the support of its window. Descending offsets
+    # accumulate the active windows in increasing order of their start times.
+    for offset in range(stop - 1, start - 1, -1):
+        out[offset:offset + len(scores)] += scores
+    return out
+
+
 def project_sum(sample_scores: np.ndarray, span: int, n: int) -> np.ndarray:
     """Ec. (4) del artículo: cada instante suma el score de todas las
     ventanas que lo contienen. La ventana i cubre [i, i + span)."""
-    s = np.asarray(sample_scores, dtype=np.float64)
-    acc = np.zeros(n + 1)
-    m = len(s)
-    acc[:m] += s
-    acc[span:span + m] -= s
-    return np.cumsum(acc)[:n]
+    return _sum_at_offsets(sample_scores, 0, span, n)
 
 
 def project_targets_mean(sample_scores: np.ndarray, L: int, P: int, n: int) -> np.ndarray:
     """Proyección clásica de *prediction deviation*: el error de la ventana i
     se asigna sólo a los instantes que predice, [i + L, i + L + P), y se
     promedia sobre las predicciones que cubren cada instante."""
-    s = np.asarray(sample_scores, dtype=np.float64)
-    m = len(s)
-    acc = np.zeros(n + 1)
-    cnt = np.zeros(n + 1)
-    acc[L:L + m] += s
-    acc[L + P:L + P + m] -= s
-    cnt[L:L + m] += 1
-    cnt[L + P:L + P + m] -= 1
-    acc, cnt = np.cumsum(acc)[:n], np.cumsum(cnt)[:n]
-    out = np.zeros(n)
-    nz = cnt > 0
-    out[nz] = acc[nz] / cnt[nz]
+    out = _sum_at_offsets(sample_scores, L, L + P, n)
+    m = len(sample_scores)
+    if m and P > 1:
+        covered = out[L:L + m + P - 1]
+        t = np.arange(len(covered))
+        counts = np.minimum(t + 1, m) - np.maximum(t - P + 1, 0)
+        covered /= counts
     return out
 
 

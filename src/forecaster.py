@@ -168,11 +168,14 @@ def train_trace(X: np.ndarray, L: int, P: int, seed: int, arch: str = "lstm",
         lr_now = opt.param_groups[0]["lr"]
         perm = torch.randperm(M, generator=gen).to(device)
         for b in perm.split(batch):
+            wb = w[b]
+            mass = wb.sum()
+            if weights is not None and mass == 0:
+                continue
             xb, yb = _windows(Xt, b, L, P)
             pred, _ = model(xb)
             l = ((pred - yb) ** 2).mean(dim=(1, 2))
-            wb = w[b]
-            loss = (l * wb).sum() / wb.sum().clamp_min(1e-12)
+            loss = (l * wb).sum() / mass.clamp_min(1e-12)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
@@ -212,7 +215,11 @@ def weights_from_influence(s: np.ndarray, mode: str, z0: float = 2.0, w_min: flo
     z0 = 2 y w_min = 0.05 se fijan a priori (no se ajustan con etiquetas)."""
     z = robust_z(np.log(np.maximum(s, 1e-30)))
     if mode == "soft":
-        return np.where(z <= z0, 1.0, np.maximum(w_min, np.exp(-(z - z0))))
+        attenuate = z > z0
+        weights = np.full_like(z, np.nan)
+        weights[z <= z0] = 1.0
+        weights[attenuate] = np.maximum(w_min, np.exp(-(z[attenuate] - z0)))
+        return weights
     if mode == "trim":
         return np.where(z <= z0, 1.0, 0.0)
     raise ValueError(mode)
